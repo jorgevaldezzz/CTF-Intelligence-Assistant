@@ -1,4 +1,4 @@
-import type { ChunkDocument } from "./schema.js";
+import type { ChunkDocument, NvdChunk } from "./schema.js";
 
 export function dedupeChunks(chunks: ChunkDocument[]): ChunkDocument[] {
   const seen = new Map<string, ChunkDocument>();
@@ -19,15 +19,30 @@ export function dedupeChunks(chunks: ChunkDocument[]): ChunkDocument[] {
 }
 
 export function dedupeKey(chunk: ChunkDocument): string {
-  return chunk.source === "nvd" ? `cve:${chunk.id}` : `url:${chunk.url}`;
+  // Both sources now key on id — NVD ids are CVE-IDs, CTFtime ids are sha1 hashes
+  return `${chunk.source}:${chunk.id}`;
 }
 
 function mergeChunk(existing: ChunkDocument, candidate: ChunkDocument): ChunkDocument {
+  // Category: prefer anything over "other"
+  const category =
+    existing.category !== "other" ? existing.category : candidate.category;
+
+  // NVD-only fields — only attempt merge when both sides are NvdChunks
+  if (existing.source === "nvd" && candidate.source === "nvd") {
+    return {
+      ...(existing as NvdChunk),
+      category,
+      cwe: existing.cwe ?? (candidate as NvdChunk).cwe,
+      severity: existing.severity ?? (candidate as NvdChunk).severity,
+      text: existing.text || candidate.text,
+    } satisfies NvdChunk;
+  }
+
+  // CTFtime or cross-source collision (shouldn't happen, but jic)
   return {
     ...existing,
-    category: existing.category !== "other" ? existing.category : candidate.category,
-    cwe: existing.cwe ?? candidate.cwe,
-    severity: existing.severity ?? candidate.severity,
+    category,
     text: existing.text || candidate.text,
   };
 }
