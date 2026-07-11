@@ -22,8 +22,8 @@ Phase 3: Build the website then host it on Vercel and use it during the next CTF
 ## Data sources
 | Source     | Count  | Coverage                        |
 |------------|--------|---------------------------------|
-| NVD/CVE | ~6,200 | SQL injection, XSS, buffer overflow, ... |
-| CTF writeups | ~800 | web, pwn, crypto, forensics, rev |
+| NVD/CVE | 113,055 | SQL injection, XSS, buffer overflow, ... |
+| CTF writeups | 1,422 | web, pwn, crypto, forensics, rev |
 
 > Exact counts generated in `pipeline.log` after running the ingestion pipeline.
 
@@ -63,7 +63,7 @@ Brief ADR-style notes.
 - **Semantic chunking** - writeups vary wildly in length; fixed-size chunking lost context ← for when CTFtime writeups ingestion is completed
 
 ## Changelog
-- `2025-04-22` - Phase 1 (partial): NVD/CVE ingestion pipeline  
-- `2026-07-10` - Phase 1 complete: CTFtime GitHub scraper + transform (1422 chunks, 1045 repos)
+- `2025-04-22` - Phase 1 (partial): NVD/CVE ingestion pipeline
+- `2026-07-11` - Phase 1 complete: NVD ingestion pipeline (113,055 chunks across 23 keyword buckets)
 - `TBD` - Phase 2: embedding + retrieval
 - `TBD` - Phase 3: UI + evaluation
