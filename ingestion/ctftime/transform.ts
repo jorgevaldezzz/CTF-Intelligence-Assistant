@@ -1,7 +1,7 @@
 import fs from "fs/promises";
 import path from "path";
 import crypto from "crypto";
-import { CtfChunk, CtfCategory } from "../shared/schema";
+import type { CtfChunk, CtfCategory } from "../shared/schema.js";
 
 const RAW_READMES_DIR = path.resolve("data/raw/ctftime/readmes");
 const CHUNKS_DIR = path.resolve("data/chunks");

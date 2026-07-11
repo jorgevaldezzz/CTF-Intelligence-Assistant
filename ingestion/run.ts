@@ -1,3 +1,4 @@
+import "dotenv/config";
 import path from "node:path";
 import { writeFile, mkdir } from "node:fs/promises";
 

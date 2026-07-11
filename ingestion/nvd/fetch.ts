@@ -18,7 +18,7 @@ export interface NvdPage {
 }
 
 const NVD_BASE_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0";
-const DEFAULT_RESULTS_PER_PAGE = 2000;
+const DEFAULT_RESULTS_PER_PAGE = 100;
 
 export const NVD_KEYWORD_BUCKETS = [
   "sql injection",
@@ -68,6 +68,7 @@ export async function fetchNvdRaw(opts: {
 
     while (true) {
       const url = buildNvdUrl(keyword, startIndex, resultsPerPage, includeRejected);
+      console.log("[nvd] Requesting:", url);
       const page = await fetchJson<NvdPage>(url, opts.apiKey);
       const slug = slugify(keyword);
       const rawPath = path.join(outputDir, `nvd-${slug}-${startIndex}.json`);
@@ -103,7 +104,7 @@ function buildNvdUrl(keyword: string, startIndex: number, resultsPerPage: number
   });
 
   if (!includeRejected) {
-    params.set("noRejected", "true");
+    params.append("noRejected", "");
   }
 
   return `${NVD_BASE_URL}?${params.toString()}`;
@@ -112,7 +113,7 @@ function buildNvdUrl(keyword: string, startIndex: number, resultsPerPage: number
 async function fetchJson<T>(url: string, apiKey?: string): Promise<T> {
   const headers: Record<string, string> = {
     Accept: "application/json",
-    "User-Agent": "CTF-Intelligence-Assistant/1.0",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
   };
 
   if (apiKey) {
@@ -120,9 +121,15 @@ async function fetchJson<T>(url: string, apiKey?: string): Promise<T> {
   }
 
   const response = await fetch(url, { headers });
+
   if (!response.ok) {
-    throw new Error(`NVD request failed: ${response.status} ${response.statusText}`);
-  }
+  const body = await response.text();
+  const message = response.headers.get("message");
+  console.error("[nvd] Response body:", body);
+  console.error("[nvd] Message header:", message);
+  console.error("[nvd] All headers:", Object.fromEntries(response.headers.entries()));
+  throw new Error(`NVD request failed: ${response.status} ${response.statusText}`);
+}
 
   return (await response.json()) as T;
 }

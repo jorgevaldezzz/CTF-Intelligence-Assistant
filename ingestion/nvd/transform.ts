@@ -118,4 +118,19 @@ function inferCategory(text: string): NvdCategory {
     lower.includes("command injection") ||
     lower.includes("deserialization") ||
     lower.includes("ssrf") ||
-    lower.includes
+    lower.includes("xxe") ||
+    lower.includes("local file inclusion") ||
+    lower.includes("remote file inclusion")
+  ) return "web";
+
+  if (
+    lower.includes("buffer overflow") ||
+    lower.includes("heap overflow") ||
+    lower.includes("format string")
+  ) return "memory";
+
+  if (lower.includes("race condition")) return "concurrency";
+  if (lower.includes("type confusion")) return "type-safety";
+
+  return "other";
+}

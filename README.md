@@ -63,6 +63,7 @@ Brief ADR-style notes.
 - **Semantic chunking** - writeups vary wildly in length; fixed-size chunking lost context ← for when CTFtime writeups ingestion is completed
 
 ## Changelog
-- `2025-04-22` - Phase 1 (partial): NVD/CVE ingestion pipeline
+- `2025-04-22` - Phase 1 (partial): NVD/CVE ingestion pipeline  
+- `2026-07-10` - Phase 1 complete: CTFtime GitHub scraper + transform (1422 chunks, 1045 repos)
 - `TBD` - Phase 2: embedding + retrieval
 - `TBD` - Phase 3: UI + evaluation
