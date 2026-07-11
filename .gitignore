@@ -2,3 +2,5 @@
 data/raw/
 data/chunks/
 pipeline.log
+node_modules/
+.env
