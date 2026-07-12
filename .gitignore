@@ -4,3 +4,4 @@ data/chunks/
 pipeline.log
 node_modules/
 .env
+chroma-data/

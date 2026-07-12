@@ -126,11 +126,23 @@ async function main() {
 
   await ensureDirs();
 
-  // Run sources
+  // Run sources — these flags control what gets fetched/transformed THIS run.
   const nvdLog  = (!CTF_ONLY) ? await runNvd(SKIP_FETCH)  : null;
   const ctfLog  = (!NVD_ONLY) ? await runCtf(SKIP_FETCH)  : null;
 
-  // Load both chunk files, dedupe and validate across the combined corpus
+  // Load both chunk files, dedupe and validate across the combined corpus.
+  //
+  // IMPORTANT: nvd.json and ctftime.json are loaded unconditionally here,
+  // regardless of which of --nvd-only/--ctf-only was passed above. Those
+  // flags control what gets fetched and (re)transformed THIS run — they must
+  // NOT control what gets merged into all.json. nvd.json and ctftime.json
+  // are both already sitting on disk from whenever they were last produced;
+  // skipping a source this run doesn't mean its previous output should be
+  // dropped from the combined corpus. (Previously this was gated on
+  // CTF_ONLY/NVD_ONLY, which meant running --ctf-only silently overwrote
+  // all.json with ONLY the CTF chunks, discarding the NVD corpus from the
+  // merged output — nvd.json itself was untouched on disk, but all.json
+  // regressed hard. Don't reintroduce that conditional.)
   console.log("\n[run] Deduplicating and validating combined corpus…");
 
   const { readFile } = await import("node:fs/promises");
@@ -139,12 +151,12 @@ async function main() {
     try {
       return JSON.parse(await readFile(filePath, "utf-8"));
     } catch {
-      return []; // file doesn't exist yet if source was skipped
+      return []; // file doesn't exist yet if a source has never been run
     }
   }
 
-  const nvdChunks = CTF_ONLY  ? [] : await loadChunks(path.join(CHUNKS_DIR, "nvd.json"));
-  const ctfChunks = NVD_ONLY  ? [] : await loadChunks(path.join(CHUNKS_DIR, "ctftime.json"));
+  const nvdChunks = await loadChunks(path.join(CHUNKS_DIR, "nvd.json"));
+  const ctfChunks = await loadChunks(path.join(CHUNKS_DIR, "ctftime.json"));
 
   const combined        = [...nvdChunks, ...ctfChunks];
   const deduped         = dedupeChunks(combined);

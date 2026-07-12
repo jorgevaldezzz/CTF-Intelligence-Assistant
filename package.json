@@ -1,24 +1,30 @@
 {
-  "name": "ctf-intelligence-assistant",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "ingest": "tsx ingestion/run.ts",
-    "ingest:skip-fetch": "tsx ingestion/run.ts --skip-fetch",
-    "ingest:nvd": "tsx ingestion/run.ts --nvd-only",
-    "ingest:ctf": "tsx ingestion/run.ts --ctf-only"
-  },
-  "devDependencies": {
-    "@types/node": "^22.20.1",
-    "dotenv": "^17.4.2",
-    "tsx": "^4.23.0",
-    "typerscript": "^0.2.3",
-    "typescript": "^5.9.3"
-  },
-  "description": "> Domain-specific RAG system for vulnerability research and CTF challenge support.",
-  "version": "1.0.0",
-  "main": "index.js",
-  "keywords": [],
-  "author": "",
-  "license": "ISC"
+    "name": "ctf-intelligence-assistant",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "ingest": "tsx ingestion/run.ts",
+        "ingest:skip-fetch": "tsx ingestion/run.ts --skip-fetch",
+        "ingest:nvd": "tsx ingestion/run.ts --nvd-only",
+        "ingest:ctf": "tsx ingestion/run.ts --ctf-only",
+        "upsert": "tsx scripts/upsert.ts",
+        "boot:upsert": "tsx scripts/boot-upsert.ts",
+        "chroma": "powershell -ExecutionPolicy Bypass -File scripts/start-chroma.ps1"
+    },
+    "devDependencies": {
+        "@types/node": "^22.20.1",
+        "dotenv": "^17.4.2",
+        "tsx": "^4.23.0",
+        "typerscript": "^0.2.3",
+        "typescript": "^5.9.3"
+    },
+    "description": "> Domain-specific RAG system for vulnerability research and CTF challenge support.",
+    "version": "1.0.0",
+    "main": "index.js",
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "dependencies": {
+        "openai": "^6.46.0"
+    }
 }

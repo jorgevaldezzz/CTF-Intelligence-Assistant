@@ -36,6 +36,9 @@ Phase 3: Build the website then host it on Vercel and use it during the next CTF
     scrape.ts       ← scrapes writeup list, queues URLs
     fetch.ts        ← fetches + extracts each writeup page
     transform.ts    ← maps raw → chunk schema
+  /embed
+    embed.ts
+    upsert.ts
   /shared
     schema.ts       ← chunk TypeScript type
     dedupe.ts       ← deduplication by URL / CVE ID
@@ -50,6 +53,13 @@ Phase 3: Build the website then host it on Vercel and use it during the next CTF
 ### Installation
 ### Running the ingestion pipeline
 ### Running the app
+If you are self-hosting Chroma on Render and want a cold-start safety net, run the boot-time seed script before the app starts:
+
+```bash
+npm run boot:upsert
+```
+
+It checks the collection count first and only re-upserts `data/chunks/all.embedded.json` when the collection is empty.
 
 ## Evaluation
 (Fill in Phase 3 — placeholder for now)
