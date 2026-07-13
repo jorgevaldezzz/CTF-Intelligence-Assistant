@@ -6,9 +6,13 @@ Evaluates RAG output quality using RAGAS 0.4.3.
 Current metrics:
 - faithfulness (all rows, no reference required)
 - context_recall (rows with ground_truth only)
+- context_precision (rows with ground_truth only)
 
-answer_relevancy is temporarily disabled because RAGAS 0.4.3 has
-an embeddings compatibility issue with OpenAIEmbeddings.embed_query().
+answer_relevancy is permanently disabled because RAGAS 0.4.3 has
+a broken embeddings wrapper internally (AttributeError:
+'OpenAIEmbeddings' object has no attribute 'embed_query') — this is
+a bug inside ragas's own dependency chain, not something fixable
+from our side.
 """
 
 import json
@@ -24,7 +28,7 @@ from openai import OpenAI
 
 from ragas import evaluate
 from ragas.llms import llm_factory
-from ragas.metrics import Faithfulness, ContextRecall
+from ragas.metrics import Faithfulness, ContextRecall, ContextPrecision
 
 
 INPUT_PATH = Path("data/eval/ragas_input.jsonl")
@@ -66,6 +70,7 @@ def main():
 
     faithfulness = Faithfulness(llm=judge_llm)
     context_recall = ContextRecall(llm=judge_llm)
+    context_precision = ContextPrecision(llm=judge_llm)
 
 
     rows = load_rows(INPUT_PATH)
@@ -129,8 +134,12 @@ def main():
     #
     # Breakdown by source
     #
+    # NOTE: export-for-ragas.ts writes this field as `_expected_source`
+    # (with the leading underscore) — looking it up as `expected_source`
+    # (no underscore) silently returns None for every row and makes this
+    # whole breakdown quietly empty with no error. Keep the underscore.
     base_df["_expected_source"] = [
-        r.get("expected_source")
+        r.get("_expected_source")
         for r in rows
     ]
 
@@ -144,12 +153,12 @@ def main():
 
         by_source[source] = {
             "count": len(subset),
-            "scores": {
-                col: float(subset[col].mean())
-                for col in subset.columns
-                if col != "_expected_source"
-                and subset[col].dtype != object
-            },
+            "scores": (
+                subset
+                .drop(columns=["_expected_source", "_id"], errors="ignore")
+                .mean(numeric_only=True)
+                .to_dict()
+            ),
         }
 
 
@@ -158,7 +167,7 @@ def main():
 
 
     #
-    # Tier 2: Context recall
+    # Tier 2: Context recall + Context precision
     #
     if has_ground_truth:
 
@@ -176,7 +185,7 @@ def main():
 
 
         print(
-            "\nRunning context_recall on "
+            "\nRunning context_recall + context_precision on "
             f"{len(has_ground_truth)} rows..."
         )
 
@@ -184,7 +193,8 @@ def main():
         gt_result = evaluate(
             gt_dataset,
             metrics=[
-                context_recall
+                context_recall,
+                context_precision,
             ],
             raise_exceptions=True,
             batch_size=1,
@@ -205,8 +215,45 @@ def main():
 
     else:
 
+        gt_df = None
         results_summary["ground_truth_rows"] = None
 
+
+    #
+    # Per-question breakdown
+    #
+    # Tag both dataframes with the question id so we can join them
+    # reliably, rather than assuming row order lines up across two
+    # separate evaluate() calls.
+    base_df["_id"] = [r["_id"] for r in rows]
+    if has_ground_truth:
+        gt_df["_id"] = [r["_id"] for r in has_ground_truth]
+
+    gt_lookup = (
+        gt_df.set_index("_id").to_dict(orient="index")
+        if has_ground_truth
+        else {}
+    )
+
+    per_question = []
+
+    for r in rows:
+        qid = r["_id"]
+        base_row = base_df[base_df["_id"] == qid].iloc[0]
+        entry = {
+            "id": qid,
+            "question": r["question"],
+            "expected_source": r.get("_expected_source"),
+            "faithfulness": float(base_row["faithfulness"]),
+        }
+        if qid in gt_lookup:
+            if "context_recall" in gt_lookup[qid]:
+                entry["context_recall"] = float(gt_lookup[qid]["context_recall"])
+            if "context_precision" in gt_lookup[qid]:
+                entry["context_precision"] = float(gt_lookup[qid]["context_precision"])
+        per_question.append(entry)
+
+    results_summary["per_question"] = per_question
 
 
     #
@@ -270,7 +317,7 @@ def main():
     if results_summary["ground_truth_rows"]:
 
         lines.append(
-            "\n## Context Recall\n"
+            "\n## Context Recall / Context Precision\n"
         )
 
         for metric, score in results_summary["ground_truth_rows"]["scores"].items():
@@ -278,6 +325,21 @@ def main():
             lines.append(
                 f"- **{metric}**: {score:.3f}"
             )
+
+
+    lines.append("\n## Per-Question Results\n")
+    lines.append("| ID | Question | Source | Faithfulness | Context Recall | Context Precision |")
+    lines.append("|---|---|---|---|---|---|")
+    for pq in per_question:
+        q_short = pq["question"][:60].replace("|", "\\|")
+        if len(pq["question"]) > 60:
+            q_short += "..."
+        cr = f"{pq['context_recall']:.3f}" if "context_recall" in pq else "—"
+        cp = f"{pq['context_precision']:.3f}" if "context_precision" in pq else "—"
+        lines.append(
+            f"| {pq['id']} | {q_short} | {pq.get('expected_source') or '—'} | "
+            f"{pq['faithfulness']:.3f} | {cr} | {cp} |"
+        )
 
 
     with open(

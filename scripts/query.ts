@@ -126,11 +126,20 @@ export async function retrieve(
     return rawQuery(vector, topK, where);
   }
 
-  // Hybrid mode: query each source pool separately so CTF chunks (~1.3% of
-  // the corpus) aren't simply outnumbered out of the results by NVD (~99%)
-  // in one combined ANN search. This doesn't change relevance scoring, just
-  // guarantees CTF gets a fair shot at appearing at all.
-  const minCtf = ctfFloor ?? Math.max(1, Math.ceil(topK * 0.25));
+  // Hybrid mode: query each source pool separately so neither pool can
+  // fully crowd the other out of results. This cuts both ways:
+  // - NVD has ~79x more chunks than CTF, so an unfiltered search can bury
+  //   CTF results purely on volume even when they're relevant.
+  // - CTF writeups are narrative first-person prose; a narratively-phrased
+  //   question can score CTF chunks HIGHER on raw embedding similarity than
+  //   topically-exact NVD matches, purely on writing-style similarity, not
+  //   relevance. (Found this by hand: an SSRF question phrased narratively
+  //   pulled 8/8 CTF results, zero NVD, despite NVD having CVEs explicitly
+  //   tagged CWE-918 SSRF with near-identical wording to the question.)
+  // Reserving a floor for only one side re-introduces the same problem in
+  // the other direction depending on how a question happens to be phrased —
+  // so both pools get a guaranteed minimum here, not just CTF.
+  const minPerSource = ctfFloor ?? Math.max(1, Math.ceil(topK * 0.25));
 
   const nvdWhere: Record<string, unknown> = { source: "nvd" };
   const ctfWhere: Record<string, unknown> = { source: "ctftime" };
@@ -144,20 +153,20 @@ export async function retrieve(
     rawQuery(vector, topK, ctfWhere),
   ]);
 
-  // Reserve the CTF floor from CTF's own best results, then fill the
-  // remaining slots with whatever scores highest across both pools combined
-  // (excluding whatever's already been reserved).
-  const ctfFloorPicks = ctfResults.slice(0, minCtf);
-  const reservedIds = new Set(ctfFloorPicks.map((r) => r.id));
+  // Reserve each pool's own best results first, then fill remaining slots
+  // with whatever scores highest across both pools combined.
+  const nvdFloorPicks = nvdResults.slice(0, minPerSource);
+  const ctfFloorPicks = ctfResults.slice(0, minPerSource);
+  const reservedIds = new Set([...nvdFloorPicks, ...ctfFloorPicks].map((r) => r.id));
 
   const remainingPool = [...nvdResults, ...ctfResults]
     .filter((r) => !reservedIds.has(r.id))
     .sort((a, b) => b.score - a.score);
 
-  const fillSlots = Math.max(0, topK - ctfFloorPicks.length);
-  const merged = [...ctfFloorPicks, ...remainingPool.slice(0, fillSlots)];
+  const fillSlots = Math.max(0, topK - nvdFloorPicks.length - ctfFloorPicks.length);
+  const merged = [...nvdFloorPicks, ...ctfFloorPicks, ...remainingPool.slice(0, fillSlots)];
 
-  // Final sort by score for display — the floor guarantee already happened,
+  // Final sort by score for display — the floor guarantees already happened,
   // this is just presentation order.
   return merged.sort((a, b) => b.score - a.score);
 }

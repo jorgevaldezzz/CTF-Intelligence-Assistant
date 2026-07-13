@@ -33,11 +33,37 @@ interface RagasRow {
   _retrieved_sources: string[];
 }
 
+// RAGAS's faithfulness metric has to fit the full answer PLUS all contexts
+// into a structured-output call that breaks the answer into atomic
+// statements and verdicts each one — an unbounded context (some CTF README
+// chunks are long) risks hitting the LLM's max_tokens limit on that step
+// and failing with IncompleteOutputException. Cap each context chunk's
+// length here, specifically for the eval export — this doesn't touch the
+// production retrieve() path or what a real user actually sees, and
+// generateAnswer() above still gets the FULL untruncated context (it needs
+// the complete text to answer well) — only the copy written out for RAGAS
+// to score is shortened.
+const MAX_CONTEXT_CHARS = 1500;
+
+function truncateContext(text: string): string {
+  return text.length > MAX_CONTEXT_CHARS ? text.slice(0, MAX_CONTEXT_CHARS) + "..." : text;
+}
+
 async function main() {
+  const idFilter = process.argv.find((a) => a.startsWith("--id="))?.split("=")[1];
+
   const raw = await fs.readFile(QUESTIONS_PATH, "utf-8");
-  const questions: EvalQuestion[] = JSON.parse(raw).filter(
+  let questions: EvalQuestion[] = JSON.parse(raw).filter(
     (q: EvalQuestion) => !q._comment // drop the placeholder example row
   );
+
+  if (idFilter) {
+    questions = questions.filter((q) => q.id === idFilter);
+    if (!questions.length) {
+      console.error(`No question with id "${idFilter}" found in ${QUESTIONS_PATH}`);
+      process.exit(1);
+    }
+  }
 
   if (!questions.length) {
     console.error(
@@ -58,7 +84,7 @@ async function main() {
     rows.push({
       question: q.question,
       answer,
-      contexts: contexts.map((c) => c.text),
+      contexts: contexts.map((c) => truncateContext(c.text)),
       ...(q.ground_truth ? { ground_truth: q.ground_truth } : {}),
       _id: q.id,
       _expected_source: q.expected_source,
@@ -67,11 +93,14 @@ async function main() {
   }
 
   await fs.mkdir(path.dirname(OUTPUT_PATH), { recursive: true });
+  const outputPath = idFilter
+    ? path.resolve(`data/eval/ragas_input.${idFilter}.jsonl`)
+    : OUTPUT_PATH;
   const lines = rows.map((r) => JSON.stringify(r)).join("\n") + "\n";
-  await fs.writeFile(OUTPUT_PATH, lines);
+  await fs.writeFile(outputPath, lines);
 
-  console.log(`\nWrote ${rows.length} rows to ${OUTPUT_PATH}`);
-  console.log(`Next: python eval/run_ragas.py`);
+  console.log(`\nWrote ${rows.length} rows to ${outputPath}`);
+  if (!idFilter) console.log(`Next: python eval/run_ragas.py`);
 }
 
 main().catch((err) => {

@@ -1,72 +1,60 @@
 [{
         "id": "q001",
-        "question": "What is CWE-89 and how does it typically show up in a web login form?",
-        "ground_truth": "CWE-89 is SQL Injection. It typically shows up in a login form when user-supplied input (like a username or password field) is concatenated directly into a SQL query without sanitization or parameterization, allowing an attacker to inject SQL syntax that alters the query's logic — for example, to bypass authentication or extract data from the database.",
+        "question": "CTF web challenge: the login page's source code shows the query `SELECT * FROM users WHERE username='$user' AND password='$pass'` built via raw string concatenation, no prepared statements. What should I try first to get past the login, and why does this query structure make it possible?",
+        "ground_truth": "This is classic SQL injection (CWE-89) via unsanitized string concatenation. A common first attempt is submitting a username like `' OR '1'='1' -- ` (or `admin'--`), which closes the quoted string early and appends a condition that's always true, turning the WHERE clause into something that matches the first user (or bypasses the password check entirely) since everything after `--` is commented out. Worth also checking whether the password field is similarly injectable, and whether error messages leak DB structure (verbose SQL errors) to help escalate toward a full injection if a simple bypass doesn't work.",
         "expected_source": "nvd"
     },
     {
         "id": "q002",
-        "question": "I have a CTF pwn challenge with a binary that has no stack protector and calls gets() into a fixed-size buffer. What's the general approach to exploiting this?",
-        "ground_truth": "This is a classic stack-based buffer overflow. Since gets() doesn't bound-check input, you can overflow the fixed-size buffer to overwrite adjacent stack memory, including the saved return address. Without a stack protector (canary), the general approach is: find the offset from the start of the buffer to the return address (often via a cyclic pattern), then overwrite that return address with the address of a target (e.g. a win function, or shellcode placed on the stack/elsewhere) to redirect execution.",
+        "question": "CTF pwn challenge: checksec shows no stack canary, NX enabled, no PIE. The binary calls gets() into a 64-byte local char buffer right before returning. What's my exploitation plan given NX is on?",
+        "ground_truth": "With NX enabled, you can't just jump to injected shellcode on the stack, so the standard approach is a ret2libc or ROP-based attack instead of stack shellcode injection. Since PIE is off, the binary's own addresses (and likely libc's, if you can leak a libc address) are static/predictable, which makes building a ROP chain easier. Plan: (1) find the offset from the buffer to the saved return address using a cyclic pattern, (2) build a ROP chain — e.g. call a leak function (like puts on a GOT entry) to leak a libc address if no leak is already given, calculate the libc base, then (3) chain to system(\"/bin/sh\") or an equivalent one-gadget to get a shell, overwriting the return address with the chain instead of shellcode.",
         "expected_source": "ctftime"
     },
     {
         "id": "q003",
-        "question": "What's the difference between a stack-based and heap-based buffer overflow in terms of what gets corrupted?",
-        "ground_truth": "A stack-based buffer overflow corrupts data on the call stack — typically local variables, saved registers, and the return address, which can lead to control-flow hijacking when the function returns. A heap-based buffer overflow corrupts heap-allocated memory instead, which can overwrite adjacent heap metadata or other heap-allocated objects (like function pointers or other data structures), often leading to exploitation through heap metadata corruption or overwriting object contents rather than directly hijacking a return address.",
-        "expected_source": "nvd"
+        "question": "CTF crypto challenge: I'm given an RSA public key with a very small public exponent (e=3), and a ciphertext, with no padding applied to the plaintext before encryption. What weakness should I be looking to exploit?",
+        "ground_truth": "This points to Hastad's broadcast attack or, more directly for a single ciphertext, a small-e cube-root attack: if the plaintext m is small enough that m^3 is less than the modulus N (i.e. no padding was used and the message is short relative to the key size), then the ciphertext c = m^3 mod N might not actually wrap around the modulus, meaning c = m^3 exactly (over the integers), and you can just take the integer cube root of c directly to recover m. Worth checking the ciphertext/modulus size relationship first to confirm whether this no-wraparound case actually applies before assuming it's the intended path.",
+        "expected_source": "ctftime"
     },
     {
         "id": "q004",
-        "question": "How would you start approaching an unfamiliar 'pwn' challenge binary you've just been given?",
+        "question": "CTF forensics challenge: I've been given a raw memory dump (.mem file) and told 'something is hiding in memory.' What's a reasonable first step to start investigating it?",
         "ground_truth": null,
         "expected_source": "ctftime"
     },
     {
         "id": "q005",
-        "question": "What does CVSS severity 9.8 generally indicate about a vulnerability, and what kind of CWE classes tend to score that high?",
-        "ground_truth": "A CVSS score of 9.8 is in the 'Critical' range, generally indicating the vulnerability is remotely exploitable, requires little or no privileges/user interaction, and results in a high impact on confidentiality, integrity, and availability. CWE classes that commonly score in this range include SQL Injection (CWE-89), remote code execution via buffer overflows or deserialization, and authentication bypass vulnerabilities — anything allowing an unauthenticated remote attacker to fully compromise a system.",
+        "question": "During a CTF, I found that a web app's 'export report' feature lets me supply an internal URL, and the server fetches and returns whatever's at that URL. What's this vulnerability called, and how could I use it to reach something like a cloud metadata endpoint to help find the flag?",
+        "ground_truth": "This is Server-Side Request Forgery (SSRF) — the server is making a request to a URL you control instead of a fixed, trusted destination. In a cloud-hosted CTF challenge, a classic technique is pointing the 'export report' URL at the cloud provider's internal metadata service (commonly reachable at a link-local address, e.g. 169.254.169.254 on AWS/GCP/Azure-style setups), which can expose instance credentials, configuration, or other internal data not meant to be reachable externally — sometimes containing the flag directly, or credentials that lead to it.",
         "expected_source": "nvd"
     },
     {
         "id": "q006",
-        "question": "What kinds of vulnerabilities show up most often in CTF web categories versus pwn categories?",
+        "question": "CTF rev challenge: I've got a stripped 64-bit ELF binary with no symbols and I need to figure out what it does before I can find the flag logic. Where do I even start?",
         "ground_truth": null,
         "expected_source": "ctftime"
     },
     {
         "id": "q007",
-        "question": "What is SSRF and why is it dangerous in a cloud-hosted application specifically?",
-        "ground_truth": "SSRF (Server-Side Request Forgery) occurs when an attacker can induce a server to make HTTP requests to unintended destinations on the attacker's behalf. In cloud-hosted applications specifically, it's especially dangerous because it can be used to reach internal cloud metadata endpoints (e.g. instance metadata services), potentially exposing credentials, API keys, or other sensitive configuration that the server itself has access to but that shouldn't be reachable from outside.",
+        "question": "CTF web challenge: a file upload feature accepts images, but I noticed it only checks the file extension, not the actual content. How could this be abused to get code execution on the server?",
+        "ground_truth": "If only the extension is checked (e.g. requiring `.jpg` or `.png`), you may be able to upload a file with a permitted extension but malicious content — for example, a PHP web shell saved as `shell.php.jpg`, or exploiting how the server maps extensions if double-extension tricks work, or simply renaming a `.php` file to `.jpg` if the server later trusts a different signal (like Content-Type header, which is also client-controlled) rather than truly validating the file. If the upload directory is web-accessible and the server can be tricked into executing the uploaded file as a script (e.g. via a misconfigured handler, or if the extension check can be bypassed to actually upload a `.php`/`.phtml` file), you can get remote code execution by requesting the uploaded file directly and having the server execute it.",
         "expected_source": "nvd"
     },
     {
         "id": "q008",
-        "question": "For a CTF forensics challenge involving a memory dump, what's a reasonable first step?",
+        "question": "CTF misc challenge: I'm given a .pcap file and told the flag is 'somewhere in the traffic.' What should I check first in Wireshark?",
         "ground_truth": null,
         "expected_source": "ctftime"
     },
     {
         "id": "q009",
-        "question": "What does LFI stand for, and how does it differ from RFI?",
-        "ground_truth": "LFI stands for Local File Inclusion, where an application is tricked into including/executing a file that already exists on the local server's filesystem, often via unsanitized path input. RFI stands for Remote File Inclusion, where the application instead includes a file from a remote, attacker-controlled location (like a URL). LFI relies on files already present locally (sometimes combined with log poisoning or upload tricks to get attacker-controlled content onto disk first), while RFI directly pulls attacker-hosted code over the network — though RFI is less common today since it typically requires insecure configuration (like allow_url_include) that's disabled by default in most modern environments.",
+        "question": "CTF web challenge: I noticed the app lets me request `/download?file=report.pdf`, and changing it to `/download?file=../../../../etc/passwd` actually returns the passwd file. What's this called and how far can it typically be pushed?",
+        "ground_truth": "This is a path traversal / Local File Inclusion (LFI) vulnerability (CWE-22/CWE-98 depending on whether the file is just read or also executed) — the app isn't sanitizing the `file` parameter, letting `../` sequences escape the intended directory. Beyond reading arbitrary readable files (config files, source code, SSH keys, etc.), if the application actually includes/executes the file's contents (as in PHP's include()) rather than just serving it as a download, this can sometimes be escalated to remote code execution — for example via log poisoning (injecting PHP code into a log file the server writes, like an access log or auth log, then including that log file to execute the injected code), or via other files you can influence the contents of.",
         "expected_source": "nvd"
     },
     {
         "id": "q010",
-        "question": "In a CTF crypto challenge, what's a common giveaway that you're dealing with a weak or misused RSA implementation?",
-        "ground_truth": null,
-        "expected_source": "ctftime"
-    },
-    {
-        "id": "q011",
-        "question": "What is a race condition vulnerability and what CWE category does it usually fall under?",
-        "ground_truth": "A race condition vulnerability occurs when the security of a system depends on the timing or ordering of events (like two threads or processes accessing a shared resource), and an attacker can exploit the window between a check and its corresponding use (a TOCTOU — time-of-check to time-of-use — flaw) to cause unintended behavior, such as bypassing a permission check. These typically fall under CWE-362 (Concurrent Execution using Shared Resource with Improper Synchronization) or related concurrency CWEs.",
-        "expected_source": "nvd"
-    },
-    {
-        "id": "q012",
-        "question": "What should you check first when a CTF reverse engineering challenge gives you a stripped binary?",
+        "question": "CTF pwn challenge: the binary uses malloc/free and I suspect a use-after-free bug based on the challenge description. What's the general exploitation strategy for a UAF in this kind of challenge?",
         "ground_truth": null,
         "expected_source": "ctftime"
     }

@@ -23,8 +23,11 @@ export async function generateAnswer(question: string, contexts: RetrievedChunk[
         role: "system",
         content:
           "You are a CTF/vulnerability research assistant. Answer the question using ONLY the numbered context provided. " +
-          "If the context doesn't contain enough information to answer, say so explicitly rather than guessing. " +
-          "Reference sources by their citation when relevant.",
+          "If the context does not contain material directly relevant to the SPECIFIC vulnerability or technique asked about, " +
+          "respond with exactly: \"The retrieved context doesn't contain relevant information for this question.\" " +
+          "Do not answer from general knowledge, even if you are confident in the answer — an answer not grounded in the " +
+          "provided context is a failure, regardless of whether it happens to be correct. " +
+          "Reference sources by their citation when relevant. Keep your answer focused and under 200 words.",
       },
       {
         role: "user",
@@ -32,6 +35,12 @@ export async function generateAnswer(question: string, contexts: RetrievedChunk[
       },
     ],
     temperature: 0,
+    // RAGAS's faithfulness metric breaks the full answer into atomic
+    // statements via structured output — an unbounded answer risks that
+    // step hitting its own max_tokens ceiling and failing with
+    // IncompleteOutputException. Capping here keeps answers focused AND
+    // keeps eval scoring reliable.
+    max_tokens: 500,
   });
 
   return res.choices[0]?.message?.content ?? "";

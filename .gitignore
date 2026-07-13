@@ -5,3 +5,8 @@ pipeline.log
 node_modules/
 .env
 chroma-data/
+
+# Evaluation rerun artifacts
+data/eval/ragas_input.*.jsonl
+eval/results*.json
+eval/RESULTS*.md
