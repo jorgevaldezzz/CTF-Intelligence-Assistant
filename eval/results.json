@@ -1,0 +1,15 @@
+{
+  "all_rows": {
+    "count": 12,
+    "scores": {
+      "faithfulness": 0.8854166666666666
+    }
+  },
+  "by_expected_source": {},
+  "ground_truth_rows": {
+    "count": 7,
+    "scores": {
+      "context_recall": 0.6904761904761905
+    }
+  }
+}
