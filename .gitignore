@@ -8,5 +8,3 @@ chroma-data/
 
 # Evaluation rerun artifacts
 data/eval/ragas_input.*.jsonl
-eval/results*.json
-eval/RESULTS*.md

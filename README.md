@@ -101,8 +101,8 @@ npx tsx scripts/query.ts "your CTF challenge description or question here"
 ```
 
 Retrieval is hybrid by default: NVD (~99% of the corpus) and CTF writeups (~1.2%) are queried as
-separate pools and merged, with a guaranteed floor of CTF results, rather than one combined search
-where CTF chunks get statistically crowded out by NVD's volume advantage. See
+separate pools and merged, with a guaranteed floor reserved for *both* pools, rather than one
+combined search where either pool can crowd the other out entirely. See
 [Architecture decisions](#architecture-decisions).
 
 ## Evaluation
@@ -118,35 +118,45 @@ python eval/run_ragas.py
 
 | Metric | Score |
 |---|---|
-| Faithfulness (n=10) | 0.794 |
-| Context recall (n=6) | 0.861 |
-| Context precision (n=6) | 0.808 |
+| Faithfulness (n=10) | 0.876 |
+| Context recall (n=6) | 0.944 |
+| Context precision (n=6) | 0.803 |
 
 | Source group | Faithfulness |
 |---|---|
 | NVD-style questions (n=4) | 0.750 |
-| CTF-writeup-style questions (n=6) | 0.824 |
+| CTF-writeup-style questions (n=6) | 0.961 |
 
 Full per-question breakdown in [`eval/RESULTS.md`](./eval/RESULTS.md).
 
 **Honest caveats:**
-- **n=10 is a demo-scale eval, not a statistically rigorous one.** These numbers show the
-  pipeline works end-to-end and that the eval harness catches real failures (see below) — they
-  aren't precise enough to claim a specific faithfulness percentile with confidence.
+- **n=10 is a demo-scale eval, not a statistically rigorous one.** Between the previous eval run
+  and this one, retrieval and prompt logic both changed, and which single question scored lowest
+  flipped entirely (see below) — a reminder that on a set this size, per-question results are
+  noisy and the aggregate shouldn't be read as a precise percentile.
 - **`answer_relevancy` is not included.** RAGAS 0.4.3 has a broken embeddings wrapper internally
   (`AttributeError: 'OpenAIEmbeddings' object has no attribute 'embed_query'`) that isn't fixable
   from this project's side — a bug in RAGAS's own dependency chain, not in this pipeline.
-- **One question (SSRF) scored faithfulness 0.000** — the model answered from general training
-  knowledge instead of the retrieved context. Confirmed via manual query (`npx tsx scripts/query.ts
-  "SSRF"`) that this is *not* a corpus coverage gap — the corpus has strong, directly relevant
-  material (a dedicated SSRF CTF writeup at rank #1, five NVD CVEs explicitly tagged CWE-918).
-  This is a pure generation-side failure: `generateAnswer()`'s system prompt says to use only the
-  provided context, but doesn't stop the model from ignoring that instruction when it's confident
-  in an answer from its own training data. Left in the results deliberately rather than dropped —
-  a RAGAS harness that only ever returns clean numbers isn't demonstrating anything, and this is
-  the eval correctly catching a real failure mode. Next step: tighten the system prompt to force
-  an explicit "not covered in retrieved context" fallback rather than allowing confident
-  parametric answers to slip through.
+- **Grounding strictness is a real precision/recall tradeoff, demonstrated in both directions.**
+  Two incidents while tuning `generateAnswer()`'s system prompt, on two different questions:
+  - *Under-strict* (original prompt): an SSRF question was answered confidently from the model's
+    general training knowledge, ignoring the fact the retrieved context didn't actually cover the
+    specific technique asked about (cloud metadata endpoint pivoting). Faithfulness: 0.000.
+    Confirmed via manual query that the corpus *did* have on-topic material (CWE-918 CVEs, a
+    dedicated SSRF writeup) — the model just wasn't using it. Fixed by tightening the prompt to
+    require an explicit refusal when context doesn't cover the *specific* thing asked.
+  - *Over-strict* (tightened prompt): a file-upload-to-RCE question was refused outright — "the
+    retrieved context doesn't contain relevant information" — despite the retrieved context
+    containing `CVE-2025-50848`, a near-exact match ("file upload vulnerability... allows
+    attackers to execute arbitrary code"). Faithfulness: 0.000. The stricter prompt swung from
+    fabricating past genuine gaps to refusing past genuine matches.
+  - Kept the stricter prompt (current), reasoning that refusing on a real match is a safer failure
+    mode for this domain than fabricating past a real gap — but this is a judgment call, not a
+    solved problem, and a third prompt iteration risks becoming a whack-a-mole loop without
+    converging. Documented here rather than chased further.
+- **Both of the above were caught, not avoided** — every full re-run's raw per-question output is
+  kept in [`eval/RESULTS.md`](./eval/RESULTS.md), including the low scores, rather than curated
+  down to a clean-looking summary.
 
 ## Architecture decisions
 Brief ADR-style notes on the non-obvious choices, mostly ones that only became clear after hitting
@@ -161,12 +171,17 @@ real bugs against real data at scale:
   Self-hosted Chroma (v2 REST API — the v1 surface was removed entirely as of Chroma 1.0.0)
   avoids that ceiling for local dev. Deploy target for Chroma itself is still an open question
   (serverless hosts don't map cleanly onto a persistent vector DB process).
-- **Hybrid retrieval merge** — CTF writeups are ~1.2% of the corpus by volume. An unfiltered
-  single search let NVD's volume advantage crowd CTF chunks out of results entirely for
-  CTF-phrased queries, even when a highly relevant CTF writeup existed. Retrieval now queries
-  each source pool separately and reserves a floor (~25% of top-k) for CTF results, then merges
-  by score — confirmed by hand that CTF results can and do rank #1 on their own merit post-merge,
-  not just fill the reserved floor.
+- **Hybrid retrieval merge, with a symmetric floor for both pools.** CTF writeups are ~1.2% of
+  the corpus by volume; an unfiltered single search let NVD's volume advantage crowd CTF chunks
+  out of results entirely for CTF-phrased queries. First fix reserved a floor only for CTF. That
+  wasn't sufficient: CTF writeups are narrative first-person prose, and a narratively-phrased
+  question can score CTF chunks *higher* than topically-exact NVD matches on raw embedding
+  similarity, purely on writing-style similarity — found by hand when an SSRF question (phrased
+  narratively) returned 8/8 CTF results and zero NVD, despite NVD having CVEs explicitly tagged
+  `CWE-918` with near-identical wording to the question. Retrieval now reserves a floor for
+  *both* pools (query each separately, guarantee a minimum from each, fill remaining slots by
+  score across both) — confirmed by hand that results from either pool can rank #1 on genuine
+  merit post-merge, not just fill their reserved floor.
 - **`nvd.json`/`ctftime.json` are always merged into `all.json` regardless of which ingestion flag
   was passed** — `--nvd-only`/`--ctf-only` control what gets *fetched/transformed* that run, not
   what gets merged into the combined output. (Earlier version of `run.ts` gated the merge on these
@@ -182,4 +197,6 @@ real bugs against real data at scale:
   full corpus embedded and upserted into Chroma (114,401 vectors); hybrid retrieval merge added
 - `2026-07-13` — RAGAS evaluation harness built and run against real pipeline output (10-question
   eval set, faithfulness/context recall/context precision)
+- `2026-07-13` — Symmetric hybrid retrieval floor (both NVD and CTF pools protected, not just CTF);
+  `generateAnswer()` grounding-strictness tuned and documented as a real precision/recall tradeoff
 - `TBD` — Phase 3: web UI, deployment

@@ -1,15 +1,103 @@
 {
   "all_rows": {
-    "count": 12,
+    "count": 10,
     "scores": {
-      "faithfulness": 0.8854166666666666
+      "faithfulness": 0.8763888888888889
     }
   },
-  "by_expected_source": {},
-  "ground_truth_rows": {
-    "count": 7,
-    "scores": {
-      "context_recall": 0.6904761904761905
+  "by_expected_source": {
+    "nvd": {
+      "count": 4,
+      "scores": {
+        "faithfulness": 0.75
+      }
+    },
+    "ctftime": {
+      "count": 6,
+      "scores": {
+        "faithfulness": 0.9606481481481483
+      }
     }
-  }
+  },
+  "ground_truth_rows": {
+    "count": 6,
+    "scores": {
+      "context_recall": 0.9444444444444443,
+      "context_precision": 0.8033446711856623
+    }
+  },
+  "per_question": [
+    {
+      "id": "q001",
+      "question": "CTF web challenge: the login page's source code shows the query `SELECT * FROM users WHERE username='$user' AND password='$pass'` built via raw string concatenation, no prepared statements. What should I try first to get past the login, and why does this query structure make it possible?",
+      "expected_source": "nvd",
+      "faithfulness": 1.0,
+      "context_recall": 1.0,
+      "context_precision": 0.9379251700546283
+    },
+    {
+      "id": "q002",
+      "question": "CTF pwn challenge: checksec shows no stack canary, NX enabled, no PIE. The binary calls gets() into a 64-byte local char buffer right before returning. What's my exploitation plan given NX is on?",
+      "expected_source": "ctftime",
+      "faithfulness": 1.0,
+      "context_recall": 0.6666666666666666,
+      "context_precision": 0.9583333333173611
+    },
+    {
+      "id": "q003",
+      "question": "CTF crypto challenge: I'm given an RSA public key with a very small public exponent (e=3), and a ciphertext, with no padding applied to the plaintext before encryption. What weakness should I be looking to exploit?",
+      "expected_source": "ctftime",
+      "faithfulness": 0.8888888888888888,
+      "context_recall": 1.0,
+      "context_precision": 0.8333333333055556
+    },
+    {
+      "id": "q004",
+      "question": "CTF forensics challenge: I've been given a raw memory dump (.mem file) and told 'something is hiding in memory.' What's a reasonable first step to start investigating it?",
+      "expected_source": "ctftime",
+      "faithfulness": 0.875
+    },
+    {
+      "id": "q005",
+      "question": "During a CTF, I found that a web app's 'export report' feature lets me supply an internal URL, and the server fetches and returns whatever's at that URL. What's this vulnerability called, and how could I use it to reach something like a cloud metadata endpoint to help find the flag?",
+      "expected_source": "nvd",
+      "faithfulness": 1.0,
+      "context_recall": 1.0,
+      "context_precision": 0.48333333332125
+    },
+    {
+      "id": "q006",
+      "question": "CTF rev challenge: I've got a stripped 64-bit ELF binary with no symbols and I need to figure out what it does before I can find the flag logic. Where do I even start?",
+      "expected_source": "ctftime",
+      "faithfulness": 1.0
+    },
+    {
+      "id": "q007",
+      "question": "CTF web challenge: a file upload feature accepts images, but I noticed it only checks the file extension, not the actual content. How could this be abused to get code execution on the server?",
+      "expected_source": "nvd",
+      "faithfulness": 0.0,
+      "context_recall": 1.0,
+      "context_precision": 0.9999999999875
+    },
+    {
+      "id": "q008",
+      "question": "CTF misc challenge: I'm given a .pcap file and told the flag is 'somewhere in the traffic.' What should I check first in Wireshark?",
+      "expected_source": "ctftime",
+      "faithfulness": 1.0
+    },
+    {
+      "id": "q009",
+      "question": "CTF web challenge: I noticed the app lets me request `/download?file=report.pdf`, and changing it to `/download?file=../../../../etc/passwd` actually returns the passwd file. What's this called and how far can it typically be pushed?",
+      "expected_source": "nvd",
+      "faithfulness": 1.0,
+      "context_recall": 1.0,
+      "context_precision": 0.6071428571276786
+    },
+    {
+      "id": "q010",
+      "question": "CTF pwn challenge: the binary uses malloc/free and I suspect a use-after-free bug based on the challenge description. What's the general exploitation strategy for a UAF in this kind of challenge?",
+      "expected_source": "ctftime",
+      "faithfulness": 1.0
+    }
+  ]
 }
