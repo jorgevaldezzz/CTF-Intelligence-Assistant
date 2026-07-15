@@ -2,8 +2,24 @@ import type { NvdChunk, NvdCategory, TransformResult } from "../shared/schema.js
 import type { NvdCveRecord } from "./fetch.js";
 import { readFile, readdir, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { CWE_ALIASES } from "../../scripts/enrichment/cwe.js";
+import { extractTechniques } from "../../scripts/enrichment/technique.js";
 
 const NVD_DETAIL_URL = "https://nvd.nist.gov/vuln/detail/";
+
+// Terms that must appear verbatim in every CWE-918 (SSRF) chunk, regardless
+// of whether the raw CVE description happens to mention them. This is what
+// makes them retrievable both via embedding similarity AND via query.ts's
+// lexicalBoost exact-substring matching, not just semantic proximity.
+const CWE_918_GUARANTEED_TERMS = [
+  "169.254.169.254",
+  "AWS EC2 metadata service",
+  "Instance Metadata Service (IMDS)",
+  "Azure Metadata Service",
+  "Google Cloud Metadata Server",
+  "IAM credentials",
+  "Cloud credential theft",
+];
 
 
 // Transform one NVD CVE record into an enriched searchable chunk.
@@ -57,6 +73,25 @@ const category =
   );
 
 
+const aliases =
+  cwe
+    ? CWE_ALIASES[cwe] ?? []
+    : [];
+
+
+const techniques =
+  extractTechniques(
+    description
+  );
+
+
+const ssrfBlock =
+  enrichSsrfMetadata(
+    cwe,
+    description
+  );
+
+
 const enrichedText = `
 CVE ID:
 ${cveId}
@@ -73,12 +108,19 @@ ${severity ?? "Unknown"}
 Attack Tags:
 ${tags.join(", ")}
 
+CWE Aliases:
+${aliases.join(", ") || "None"}
+
+Techniques:
+${techniques.join(", ") || "None"}
+
 Security Concepts:
 ${inferSecurityConcepts(
   description,
   cwe,
   tags
 )}
+${ssrfBlock}
 
 Description:
 ${description}
@@ -132,6 +174,10 @@ export async function transformNvdRaw(opts: {
   let skipped = 0;
   let failed = 0;
 
+  // Temporary breakdown to diagnose the skip count — remove once confirmed.
+  let skippedNullChunk = 0;   // no cveId or no English description
+  let skippedDuplicate = 0;   // valid chunk, but cveId already seen this run
+
 
   const seen =
     new Set<string>();
@@ -175,6 +221,7 @@ export async function transformNvdRaw(opts: {
         if(!chunk){
 
           skipped++;
+          skippedNullChunk++;
           continue;
 
         }
@@ -186,6 +233,7 @@ export async function transformNvdRaw(opts: {
         ){
 
           skipped++;
+          skippedDuplicate++;
           continue;
 
         }
@@ -238,7 +286,7 @@ export async function transformNvdRaw(opts: {
 
 
   console.log(
-    `[nvd/transform] ${transformed} chunks → ${outPath} | skipped: ${skipped} | failed: ${failed}`
+    `[nvd/transform] ${transformed} chunks → ${outPath} | skipped: ${skipped} (duplicate: ${skippedDuplicate}, no-id/no-description: ${skippedNullChunk}) | failed: ${failed}`
   );
 
 
@@ -587,72 +635,30 @@ function inferAttackTags(
 }
 
 
-// Infer SSRF and cloud attack vectors.
-function inferSsrfAndCloud(
-  text:string
+// Guarantee CWE-918 (SSRF) chunks carry the full set of cloud-metadata
+// terms verbatim, independent of whether the raw CVE description mentions
+// them. Fixes the gap where only ~generic terms (via inferSecurityConcepts)
+// were reaching embedded text, missing exact phrases like "Instance
+// Metadata Service (IMDS)", "Azure Metadata Service", "Google Cloud
+// Metadata Server", and "Cloud credential theft".
+function enrichSsrfMetadata(
+  cwe:string|null,
+  description:string
 ):string {
 
   const lower =
-    text.toLowerCase();
+    description.toLowerCase();
 
+  const isSsrf =
+    cwe === "CWE-918" ||
+    lower.includes("ssrf") ||
+    lower.includes("server-side request forgery");
 
-  const terms:string[] = [];
-
-
-  const mappings:Array<[string,string]> = [
-
-    [
-      "metadata",
-      "cloud metadata endpoint"
-    ],
-
-    [
-      "169.254.169.254",
-      "AWS EC2 metadata IP"
-    ],
-
-    [
-      "credential",
-      "cloud credential theft"
-    ],
-
-    [
-      "token",
-      "access token exposure"
-    ],
-
-    [
-      "request",
-      "server initiated request"
-    ],
-
-    [
-      "fetch",
-      "URL fetch primitive"
-    ],
-
-    [
-      "proxy",
-      "open proxy behavior"
-    ],
-
-  ];
-
-
-
-  for(const [
-    keyword,
-    meaning
-  ] of mappings){
-
-    if(lower.includes(keyword)){
-      terms.push(meaning);
-    }
-
+  if(!isSsrf){
+    return "";
   }
 
-
-  return terms.join(", ");
+  return `\nCloud SSRF Indicators:\n${CWE_918_GUARANTEED_TERMS.join(", ")}`;
 }
 
 

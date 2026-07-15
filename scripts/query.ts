@@ -35,7 +35,7 @@ const DATABASE =
 //
 // Wide recall -> lexical boost -> LLM rerank
 //
-const CANDIDATE_K = 50;
+const CANDIDATE_K = 30;
 const FINAL_K = 8;
 
 
@@ -359,6 +359,76 @@ function dedupeChunks(
 
 
 
+// Corrects a systematic scale mismatch between pools: terse CVE text and
+// narrative CTF writeup prose do not produce comparable cosine-similarity
+// magnitudes even when equally relevant to a query. Comparing raw scores
+// across pools silently favors whichever pool happens to score higher on
+// average for a given query's writing style, regardless of actual
+// relevance (confirmed by hand: narrative pwn/SSRF questions scored CTF
+// prose ~1.03-1.11 vs. NVD's ~0.63-0.68 on the *same* underlying topic).
+// Z-score normalization within each pool ranks candidates by "how good is
+// this relative to its own pool's distribution" rather than raw magnitude,
+// so a genuinely strong NVD match isn't discounted just because NVD's
+// overall score distribution runs lower than CTF's for that query.
+function zScoreNormalize(
+  chunks:RetrievedChunk[]
+):RetrievedChunk[]{
+
+  if(chunks.length===0){
+    return chunks;
+  }
+
+
+  const scores =
+    chunks.map(c=>c.score);
+
+
+  const mean =
+    scores.reduce(
+      (a,b)=>a+b,
+      0
+    ) / scores.length;
+
+
+  const variance =
+    scores.reduce(
+      (a,b)=>a+(b-mean)**2,
+      0
+    ) / scores.length;
+
+
+  const stdDev =
+    Math.sqrt(variance);
+
+
+  // Guard against a degenerate pool (all identical scores, e.g. a single
+  // result) where stdDev is 0 — normalizing would divide by zero.
+  if(stdDev === 0){
+
+    return chunks.map(
+      c=>({
+        ...c,
+        score:0,
+      })
+    );
+
+  }
+
+
+  return chunks.map(
+    c=>({
+      ...c,
+      score:
+        (c.score - mean) / stdDev,
+    })
+  );
+
+}
+
+
+
+
+
 function lexicalBoost(
   chunks:RetrievedChunk[],
   query:string
@@ -575,22 +645,34 @@ export async function retrieve(
 
 
 
+    // Normalize each pool's scores independently *before* merging, so the
+    // floor/fill logic below operates on comparable relative-relevance
+    // values instead of raw magnitudes that differ systematically by pool.
+    const nvdNormalized =
+      zScoreNormalize(nvd);
+
+
+    const ctfNormalized =
+      zScoreNormalize(ctf);
+
+
+
 
     candidates = [
 
-      ...nvd.slice(
+      ...nvdNormalized.slice(
         0,
         ctfFloor
       ),
 
-      ...ctf.slice(
+      ...ctfNormalized.slice(
         0,
         ctfFloor
       ),
 
-      ...nvd,
+      ...nvdNormalized,
 
-      ...ctf,
+      ...ctfNormalized,
 
     ];
 
@@ -622,6 +704,19 @@ export async function retrieve(
 
   console.log(
     `[retrieval] candidates ${candidates.length}`
+  );
+
+
+  console.log(
+    "[retrieval] pool breakdown:",
+    candidates.reduce(
+      (acc,c)=>{
+        acc[c.source] =
+          (acc[c.source] ?? 0) + 1;
+        return acc;
+      },
+      {} as Record<string,number>
+    )
   );
 
 

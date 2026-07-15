@@ -87,6 +87,12 @@ ${c.text.slice(0,2200)}
 
 
 
+// NOTE: priorities here must stay generic — do not bake in terms specific
+// to any one vulnerability class (e.g. SSRF/cloud-metadata terminology).
+// This prompt runs for every query regardless of topic; anything added
+// here to fix one query's ranking will actively bias every other query
+// away from its actual topic. If a specific class needs better recall,
+// fix it at the chunk-enrichment layer (transform.ts), not here.
 const prompt = `
 
 You are a cybersecurity retrieval reranker.
@@ -96,36 +102,33 @@ User question:
 ${question}
 
 
-Rank the documents by usefulness for answering the question.
+Rank the documents by usefulness for answering the user's specific question.
 
 Ranking priorities:
 
-1. Exact exploit scenario match is the highest priority.
+1. Exact exploit scenario match to the user's question is the highest priority.
 
-2. Prefer documents describing:
-- cloud metadata services
-- AWS EC2 metadata
-- GCP metadata
-- Azure IMDS
-- credential theft
-- internal HTTP requests
-- attacker controlled URL fetching
-- unauthenticated SSRF exploitation
+2. Prefer documents whose vulnerability class, CWE, or exploitation mechanism directly matches
+   what the user is asking about, over documents that are only broadly related.
 
-3. Prefer documents containing exploitation mechanics over documents that only contain vulnerability labels.
+3. Prefer documents containing exploitation mechanics over documents that only contain
+   vulnerability labels.
 
-4. CWE similarity is useful but secondary.
+4. CWE similarity is useful but secondary to actual topical relevance.
 
-5. A generic SSRF vulnerability is less useful than a document describing metadata service access.
+5. CTF writeups containing exploit steps should rank above short CVE summaries when applicable
+   and equally relevant.
 
-6. CTF writeups containing exploit steps should rank above short CVE summaries when applicable.
+6. Do not rank based only on keyword overlap.
 
-7. Do not rank based only on keyword overlap.
+7. Ignore severity unless relevance is otherwise equal.
 
-8. Ignore severity unless relevance is otherwise equal.
+8. If genuinely none of the documents are relevant to the question, return as many of the
+   documents as you can rank by loose relevance rather than an empty list — the caller will
+   handle final filtering.
 
 
-Return ONLY a JSON array of document IDs.
+Return ONLY a JSON array of document IDs, ordered most to least relevant.
 
 Example:
 
@@ -173,10 +176,30 @@ try {
 
 
 
- if(!ids){
+ // Diagnostic: if rerank returned suspiciously few IDs relative to the
+ // candidate pool, log the raw model output so we can tell truncation
+ // apart from a genuine (if surprising) low-relevance judgment.
+ if(!ids || ids.length < chunks.length / 4){
+
+  console.warn(
+   "[rerank] suspiciously short result — raw output_text:",
+   response.output_text
+  );
+
+ }
+
+
+
+ // `!ids` alone does not catch a valid-but-empty array ([] is truthy in
+ // JS) — that was the actual bug. An empty rerank result must be treated
+ // as a failure (or at minimum, trigger the same fallback path), not
+ // silently pass through as "0 ranked, fill rest from original order".
+ if(!ids || ids.length === 0){
 
   throw new Error(
-   "invalid rerank JSON"
+   ids
+    ? "rerank returned an empty array"
+    : "invalid rerank JSON"
   );
 
  }
@@ -207,6 +230,16 @@ try {
 
 
 
+ if(ranked.length === 0){
+
+  throw new Error(
+   "rerank returned ids with no matching candidates"
+  );
+
+ }
+
+
+
  const seen =
   new Set(
    ranked.map(
@@ -228,7 +261,7 @@ try {
 } catch(err){
 
  console.warn(
-  "[rerank] failed:",
+  "[rerank] failed, falling back to similarity-sorted order:",
   err instanceof Error
    ? err.message
    : err
