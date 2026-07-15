@@ -62,9 +62,11 @@ material. Disproven by running an NVD-only query for the same topic — 8 clean,
 `CWE-416` results came back immediately. The material was there.
 
 **Hypothesis 2 (wrong): reranker silently failing.** Investigation found `scripts/retrieval/rerank.ts`
-had a real bug — `if(!ids)` doesn't catch a valid-but-empty array (`![]` is `true`... no,
-`![]` is `false` in JS, meaning the check never fires for `[]`), so an empty rerank result fell
-through silently to unranked candidate order with no error surfaced. Also found the rerank prompt
+had a real bug: `if(!ids)` does not catch a valid-but-empty array, since `![]` evaluates to `false` in JS. 
+This meant the check never fired when ids was [], so an empty rerank result fell through silently to 
+unranked candidate order with no error surfaced.
+
+ Also found the rerank prompt
 had hardcoded SSRF/cloud-metadata bias baked into its ranking priorities — leftover from the SSRF
 fix above, never removed, actively penalizing every non-SSRF query. Both were real bugs and were
 fixed (generic prompt, `!ids || ids.length === 0` check). **But fixing both made zero measurable
