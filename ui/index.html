@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CTF Intel - research terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div class="wordmark">CTF INTEL<span class="cursor"></span> <span class="dim">// research terminal</span></div>
+    <div class="corpus-stats">
+      <span><b>114,401</b> chunks indexed</span>
+      <span><span class="dot-nvd"></span><b>112,978</b> NVD</span>
+      <span><span class="dot-ctf"></span><b>1,423</b> CTF writeups</span>
+    </div>
+  </div>
+
+  <div class="querybar">
+    <div class="querybar-input-wrap">
+      <span class="prompt-glyph">&gt;</span>
+      <input id="queryInput" type="text" value="internal metadata service reachable from an unauthenticated /fetch?url= param, app fetches attacker-controlled URLs server-side" placeholder="ask a CTF or vuln research question" />
+    </div>
+    <div class="scope-toggle" id="scopeToggle">
+      <button class="active" data-scope="all" type="button">All</button>
+      <button data-scope="nvd" type="button">NVD</button>
+      <button data-scope="ctf" type="button">CTF</button>
+    </div>
+    <button class="run-btn" id="runBtn" type="button">Run query</button>
+  </div>
+
+  <div id="conversation">
+    <div class="query-block">
+      <div class="label">QUERY</div>
+      <div class="qtext" id="queryEcho">internal metadata service reachable from an unauthenticated /fetch?url= param, app fetches attacker-controlled URLs server-side</div>
+    </div>
+
+    <div class="analysis-block">
+      <div class="label">ANALYSIS</div>
+      <div class="analysis-prose" id="analysis">
+        <p>Run a query to see the grounded answer here.</p>
+      </div>
+
+      <div class="retrieval" id="retrieval" hidden>
+        <div class="retrieval-label">
+          <span>retrieval composition</span>
+          <span id="retrievalCount">0 chunks retrieved</span>
+        </div>
+        <div class="retrieval-bar" id="retrievalBar"></div>
+        <div class="retrieval-legend" id="retrievalLegend"></div>
+      </div>
+
+      <div class="sources">
+        <div class="label">SOURCES</div>
+        <div id="sourcesList"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footnote">live interface · retrieval and citations are generated from the current corpus</div>
+</div>
+
+<script>
+  const queryInput = document.getElementById("queryInput");
+  const queryEcho = document.getElementById("queryEcho");
+  const analysis = document.getElementById("analysis");
+  const sourcesList = document.getElementById("sourcesList");
+  const scopeToggle = document.getElementById("scopeToggle");
+  const runBtn = document.getElementById("runBtn");
+  const retrieval = document.getElementById("retrieval");
+  const retrievalBar = document.getElementById("retrievalBar");
+  const retrievalCount = document.getElementById("retrievalCount");
+  const retrievalLegend = document.getElementById("retrievalLegend");
+
+  let currentScope = "all";
+
+  function escapeHtml(value) {
+    return String(value).replace(/[&<>\"']/g, (char) => {
+      switch (char) {
+        case "&": return "&amp;";
+        case "<": return "&lt;";
+        case ">": return "&gt;";
+        case "\"": return "&quot;";
+        case "'": return "&#39;";
+        default: return char;
+      }
+    });
+  }
+
+  function setLoading(isLoading) {
+    runBtn.disabled = isLoading;
+    queryInput.disabled = isLoading;
+    runBtn.textContent = isLoading ? "querying…" : "Run query";
+  }
+
+  function clearNode(node) {
+    while (node.firstChild) node.removeChild(node.firstChild);
+  }
+
+  function severityClass(severity) {
+    const value = String(severity || "").toLowerCase();
+    if (value.includes("crit")) return "sev-critical";
+    if (value.includes("high")) return "sev-high";
+    if (value.includes("med")) return "sev-medium";
+    if (value.includes("low")) return "sev-low";
+    return "sev-medium";
+  }
+
+  function titleCase(value) {
+    const text = String(value || "");
+    if (!text) return "";
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  }
+
+  function parseNvdCitation(citation) {
+    const match = String(citation || "").match(/^(CVE-[^(]+)\s+\(([^,]+),\s*([^)]+)\)$/);
+    if (!match) {
+      return { id: citation || "NVD", severity: "medium", cwe: "CWE" };
+    }
+    return { id: match[1], severity: match[2], cwe: match[3] };
+  }
+
+  function parseCtfCitation(citation) {
+    const parts = String(citation || "").split(" — ");
+    return {
+      challenge: parts[0] || "challenge",
+      event: parts[1] || "event",
+    };
+  }
+
+  function renderAnalysis(answer) {
+    clearNode(analysis);
+    const text = String(answer || "").trim() || "No answer returned.";
+    const paragraphs = text.split(/\n\s*\n/);
+    paragraphs.forEach((para) => {
+      const p = document.createElement("p");
+      p.innerHTML = escapeHtml(para).replace(/\n/g, "<br>");
+      analysis.appendChild(p);
+    });
+  }
+
+  function renderRetrieval(chunks) {
+    const total = chunks.length || 1;
+    const nvd = chunks.filter((chunk) => chunk.source === "nvd").length;
+    const ctf = chunks.filter((chunk) => chunk.source === "ctftime").length;
+    retrieval.hidden = chunks.length === 0;
+
+    clearNode(retrievalBar);
+    clearNode(retrievalLegend);
+
+    if (!chunks.length) return;
+
+    const nvdSeg = document.createElement("div");
+    nvdSeg.className = "retrieval-seg nvd";
+    nvdSeg.style.flexBasis = `${(nvd / total) * 100}%`;
+    retrievalBar.appendChild(nvdSeg);
+
+    const ctfSeg = document.createElement("div");
+    ctfSeg.className = "retrieval-seg ctf";
+    ctfSeg.style.flexBasis = `${(ctf / total) * 100}%`;
+    retrievalBar.appendChild(ctfSeg);
+
+    retrievalCount.textContent = `${chunks.length} chunks retrieved`;
+
+    const nvdLegend = document.createElement("span");
+    nvdLegend.innerHTML = '<span class="sw nvd"></span>' + escapeHtml(`${nvd} NVD`);
+    retrievalLegend.appendChild(nvdLegend);
+
+    const ctfLegend = document.createElement("span");
+    ctfLegend.innerHTML = '<span class="sw ctf"></span>' + escapeHtml(`${ctf} CTF writeup${ctf === 1 ? "" : "s"}`);
+    retrievalLegend.appendChild(ctfLegend);
+  }
+
+  function renderSourceCard(chunk, index) {
+    const card = document.createElement("div");
+    card.className = "source-card";
+    card.dataset.id = `src-${index + 1}`;
+
+    const head = document.createElement("div");
+    head.className = "source-head";
+    head.addEventListener("click", () => card.classList.toggle("open"));
+
+    const badge = document.createElement("span");
+    badge.className = `src-badge ${chunk.source === "nvd" ? "nvd" : "ctf"}`;
+    badge.textContent = chunk.source === "nvd" ? "NVD" : "CTF";
+    head.appendChild(badge);
+
+    const meta = chunk.metadata || {};
+    if (chunk.source === "nvd") {
+      const nvd = parseNvdCitation(chunk.citation);
+
+      const id = document.createElement("span");
+      id.className = "src-id";
+      id.textContent = nvd.id;
+      head.appendChild(id);
+
+      const sev = document.createElement("span");
+      sev.className = `sev-pill ${severityClass(nvd.severity)}`;
+      sev.textContent = `${titleCase(nvd.severity)} · ${String(meta.cvss ?? "") || "—"}`;
+      head.appendChild(sev);
+
+      const cwe = document.createElement("span");
+      cwe.className = "cwe-tag";
+      cwe.textContent = String(nvd.cwe || meta.cwe || "CWE");
+      head.appendChild(cwe);
+    } else {
+      const ctf = parseCtfCitation(chunk.citation);
+
+      const id = document.createElement("span");
+      id.className = "src-id";
+      id.textContent = String(meta.challenge || ctf.challenge);
+      head.appendChild(id);
+
+      const cwe = document.createElement("span");
+      cwe.className = "cwe-tag";
+      cwe.textContent = String(meta.category || "writeup");
+      head.appendChild(cwe);
+    }
+
+    const title = document.createElement("span");
+    title.className = "src-title";
+    title.textContent = chunk.citation;
+    head.appendChild(title);
+
+    const chev = document.createElement("span");
+    chev.className = "chev";
+    chev.textContent = "▸";
+    head.appendChild(chev);
+
+    const body = document.createElement("div");
+    body.className = "source-body";
+
+    const inner = document.createElement("div");
+    inner.className = "source-body-inner";
+
+    const rows = [];
+    if (chunk.source === "nvd") {
+      const nvd = parseNvdCitation(chunk.citation);
+      rows.push(["CWE", String(nvd.cwe || meta.cwe || "CWE")]);
+      rows.push(["CVSS", String(meta.cvss || nvd.severity || "unknown")]);
+      rows.push(["Published", String(meta.published || meta.date || "unknown")]);
+    } else {
+      const ctf = parseCtfCitation(chunk.citation);
+      rows.push(["Event", String(meta.event || ctf.event || "unknown")]);
+      rows.push(["Category", String(meta.category || "unknown")]);
+      rows.push(["Challenge", String(meta.challenge || ctf.challenge || "unknown")]);
+    }
+
+    rows.forEach(([k, v]) => {
+      const row = document.createElement("div");
+      row.className = "kv-row";
+      const key = document.createElement("span");
+      key.className = "k";
+      key.textContent = k;
+      const val = document.createElement("span");
+      val.className = "v";
+      val.textContent = v;
+      row.appendChild(key);
+      row.appendChild(val);
+      inner.appendChild(row);
+    });
+
+    const excerpt = document.createElement("div");
+    excerpt.className = "src-excerpt";
+    excerpt.textContent = chunk.text;
+    inner.appendChild(excerpt);
+
+    body.appendChild(inner);
+    card.appendChild(head);
+    card.appendChild(body);
+    return card;
+  }
+
+  function renderSources(chunks) {
+    clearNode(sourcesList);
+    if (!chunks.length) {
+      const empty = document.createElement("div");
+      empty.className = "analysis-prose";
+      empty.innerHTML = "<p>No sources returned.</p>";
+      sourcesList.appendChild(empty);
+      return;
+    }
+    chunks.forEach((chunk, index) => {
+      sourcesList.appendChild(renderSourceCard(chunk, index));
+    });
+  }
+
+  async function submitQuery() {
+    const query = queryInput.value.trim();
+    if (!query) return;
+
+    queryEcho.textContent = query;
+    setLoading(true);
+    renderAnalysis("Thinking...");
+    renderSources([]);
+    retrieval.hidden = true;
+
+    const payload = { query };
+    if (currentScope === "nvd") {
+      payload.source = "nvd";
+    } else if (currentScope === "ctf") {
+      payload.source = "ctftime";
+    } else {
+      payload.hybrid = true;
+    }
+
+    try {
+      const response = await fetch("/api/query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Query failed");
+      }
+
+      renderAnalysis(data.answer);
+      renderRetrieval(data.chunks || []);
+      renderSources(data.chunks || []);
+    } catch (error) {
+      renderAnalysis(error instanceof Error ? error.message : "Unknown error.");
+      renderSources([]);
+      retrieval.hidden = true;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  scopeToggle.addEventListener("click", function(e) {
+    const btn = e.target.closest("button");
+    if (!btn) return;
+    currentScope = btn.dataset.scope || "all";
+    this.querySelectorAll("button").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+  });
+
+  document.querySelectorAll(".cite").forEach(function(c) {
+    c.addEventListener("click", function() {
+      const card = document.querySelector('.source-card[data-id="' + this.dataset.src + '"]');
+      if (card) {
+        card.classList.add("open");
+        card.scrollIntoView({
+          behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+          block: "center",
+        });
+      }
+    });
+  });
+
+  runBtn.addEventListener("click", submitQuery);
+  queryInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+      submitQuery();
+    }
+  });
+</script>
+</body>
+</html>

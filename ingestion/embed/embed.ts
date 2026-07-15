@@ -118,6 +118,11 @@ function getAliases(id: string): string[] {
 function buildEmbeddingText(chunk: ChunkDocument): string {
   const parts: string[] = [];
 
+  parts.push(`Document Type: ${chunk.source === "nvd"
+    ? "Vulnerability Record"
+    : "CTF Writeup"
+  }`);
+
   parts.push(`ID: ${chunk.id}`);
   parts.push(`Source: ${chunk.source}`);
   parts.push(`Category: ${chunk.category}`);
@@ -128,15 +133,93 @@ function buildEmbeddingText(chunk: ChunkDocument): string {
     parts.push(`Aliases: ${aliases.join(", ")}`);
   }
 
+
   if (chunk.source === "nvd") {
-    if (chunk.severity !== undefined) {
+    if (chunk.severity !== undefined && chunk.severity !== null) {
       parts.push(`Severity: ${chunk.severity}`);
     }
 
-    if (chunk.cwe !== undefined) {
-      parts.push(`CWE: ${chunk.cwe}`);
+    if (chunk.cwe) {
+      parts.push(`Weakness: ${chunk.cwe}`);
+    }
+
+    /*
+      These concepts are intentionally repeated.
+      Embeddings benefit from explicit security vocabulary.
+    */
+    const lower = chunk.text.toLowerCase();
+
+    const concepts: string[] = [];
+
+    if (
+      lower.includes("server-side request") ||
+      lower.includes("ssrf")
+    ) {
+      concepts.push(
+        "Server Side Request Forgery",
+        "SSRF",
+        "internal network access",
+        "cloud metadata exposure",
+        "169.254.169.254",
+        "attacker controlled URL"
+      );
+    }
+
+    if (
+      lower.includes("file upload") ||
+      lower.includes("upload")
+    ) {
+      concepts.push(
+        "unrestricted file upload",
+        "arbitrary file upload",
+        "web shell upload",
+        "remote code execution"
+      );
+    }
+
+    if (
+      lower.includes("path traversal") ||
+      lower.includes("directory traversal")
+    ) {
+      concepts.push(
+        "path traversal",
+        "directory traversal",
+        "arbitrary file read",
+        "local file disclosure"
+      );
+    }
+
+    if (
+      lower.includes("sql injection")
+    ) {
+      concepts.push(
+        "SQL injection",
+        "database compromise",
+        "authentication bypass"
+      );
+    }
+
+    if (
+      lower.includes("cross site scripting") ||
+      lower.includes("xss")
+    ) {
+      concepts.push(
+        "Cross Site Scripting",
+        "XSS",
+        "javascript injection",
+        "session theft"
+      );
+    }
+
+    if (concepts.length) {
+      parts.push(
+        `Security Concepts:\n${[
+          ...new Set(concepts)
+        ].join(", ")}`
+      );
     }
   }
+
 
   if (chunk.source === "ctftime") {
     if (chunk.challenge) {
@@ -148,7 +231,10 @@ function buildEmbeddingText(chunk: ChunkDocument): string {
     }
   }
 
-  parts.push(`Description:\n${chunk.text}`);
+
+  parts.push(
+    `Description:\n${chunk.text}`
+  );
 
   return parts.join("\n\n");
 }

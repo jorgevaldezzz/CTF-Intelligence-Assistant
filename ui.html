@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>CTF Intel — research terminal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+         :root {
+            --bg: #0a0e12;
+            --surface-1: #10151b;
+            --surface-2: #171e26;
+            --surface-3: #1d2530;
+            --border: #232c36;
+            --border-strong: #333f4c;
+            --text-primary: #dde4ea;
+            --text-secondary: #8b98a5;
+            --text-muted: #576270;
+            --accent: #ffb454;
+            --accent-dim: #4a3a20;
+            --nvd: #6ba7e0;
+            --nvd-bg: rgba(107, 167, 224, 0.10);
+            --nvd-border: rgba(107, 167, 224, 0.35);
+            --ctf: #c49bf5;
+            --ctf-bg: rgba(196, 155, 245, 0.10);
+            --ctf-border: rgba(196, 155, 245, 0.35);
+            --crit: #ef6a6a;
+            --crit-bg: rgba(239, 106, 106, 0.12);
+            --high: #f2a15c;
+            --high-bg: rgba(242, 161, 92, 0.12);
+            --med: #e8cb5c;
+            --med-bg: rgba(232, 203, 92, 0.12);
+            --low: #6bd7a3;
+            --low-bg: rgba(107, 215, 163, 0.12);
+            --mono: 'IBM Plex Mono', monospace;
+            --sans: 'IBM Plex Sans', sans-serif;
+        }
+        
+        * {
+            box-sizing: border-box;
+        }
+        
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            background: var(--bg);
+        }
+        
+        body {
+            font-family: var(--sans);
+            color: var(--text-primary);
+            -webkit-font-smoothing: antialiased;
+        }
+        
+         ::selection {
+            background: var(--accent-dim);
+            color: var(--accent);
+        }
+        
+        .app {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 28px 24px 60px;
+        }
+        /* header */
+        
+        .header {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 18px;
+            margin-bottom: 22px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .wordmark {
+            font-family: var(--mono);
+            font-size: 15px;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            color: var(--text-primary);
+            display: flex;
+            align-items: baseline;
+            gap: 10px;
+        }
+        
+        .wordmark .dim {
+            font-weight: 400;
+            color: var(--text-muted);
+            letter-spacing: 0.02em;
+        }
+        
+        .cursor {
+            display: inline-block;
+            width: 7px;
+            height: 14px;
+            background: var(--accent);
+            margin-left: 2px;
+            animation: blink 1.1s step-end infinite;
+            vertical-align: -2px;
+        }
+        
+        @keyframes blink {
+            50% {
+                opacity: 0;
+            }
+        }
+        
+        .corpus-stats {
+            font-family: var(--mono);
+            font-size: 11.5px;
+            color: var(--text-muted);
+            display: flex;
+            gap: 14px;
+        }
+        
+        .corpus-stats b {
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+        
+        .corpus-stats .dot-nvd,
+        .corpus-stats .dot-ctf {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            border-radius: 1px;
+            margin-right: 5px;
+        }
+        
+        .dot-nvd {
+            background: var(--nvd);
+        }
+        
+        .dot-ctf {
+            background: var(--ctf);
+        }
+        /* query bar */
+        
+        .querybar {
+            display: flex;
+            align-items: stretch;
+            gap: 8px;
+            margin-bottom: 30px;
+        }
+        
+        .querybar-input-wrap {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            background: var(--surface-1);
+            border: 1px solid var(--border);
+            border-radius: 3px;
+            padding: 0 12px;
+            transition: border-color 0.15s;
+        }
+        
+        .querybar-input-wrap:focus-within {
+            border-color: var(--border-strong);
+        }
+        
+        .prompt-glyph {
+            font-family: var(--mono);
+            color: var(--accent);
+            font-size: 14px;
+            margin-right: 8px;
+            user-select: none;
+        }
+        
+        .querybar input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: var(--text-primary);
+            font-family: var(--mono);
+            font-size: 13.5px;
+            padding: 11px 0;
+        }
+        
+        .querybar input::placeholder {
+            color: var(--text-muted);
+        }
+        
+        .scope-toggle {
+            display: flex;
+            background: var(--surface-1);
+            border: 1px solid var(--border);
+            border-radius: 3px;
+            overflow: hidden;
+            font-family: var(--mono);
+            font-size: 11.5px;
+        }
+        
+        .scope-toggle button {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 0 13px;
+            cursor: pointer;
+            border-right: 1px solid var(--border);
+            transition: background 0.15s, color 0.15s;
+        }
+        
+        .scope-toggle button:last-child {
+            border-right: none;
+        }
+        
+        .scope-toggle button:hover {
+            color: var(--text-secondary);
+        }
+        
+        .scope-toggle button.active {
+            background: var(--surface-3);
+            color: var(--text-primary);
+        }
+        
+        .run-btn {
+            font-family: var(--mono);
+            font-size: 12px;
+            font-weight: 500;
+            letter-spacing: 0.03em;
+            background: var(--surface-1);
+            color: var(--accent);
+            border: 1px solid var(--nvd-border);
+            border: 1px solid rgba(255, 180, 84, 0.35);
+            border-radius: 3px;
+            padding: 0 18px;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        
+        .run-btn:hover {
+            background: var(--accent-dim);
+        }
+        
+        .run-btn:focus-visible,
+        .querybar input:focus-visible,
+        .scope-toggle button:focus-visible {
+            outline: 1px solid var(--accent);
+            outline-offset: 1px;
+        }
+        /* conversation */
+        
+        .block {
+            margin-bottom: 8px;
+        }
+        
+        .label {
+            font-family: var(--mono);
+            font-size: 10.5px;
+            letter-spacing: 0.12em;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+        
+        .query-block {
+            padding: 14px 16px;
+            background: var(--surface-1);
+            border: 1px solid var(--border);
+            border-radius: 3px;
+            margin-bottom: 22px;
+        }
+        
+        .query-block .qtext {
+            font-family: var(--mono);
+            font-size: 12.5px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+        
+        .analysis-block {
+            margin-bottom: 26px;
+        }
+        
+        .analysis-prose {
+            font-size: 14.5px;
+            line-height: 1.75;
+            color: var(--text-primary);
+        }
+        
+        .analysis-prose p {
+            margin: 0 0 12px;
+        }
+        
+        .cite {
+            font-family: var(--mono);
+            font-size: 11px;
+            color: var(--text-secondary);
+            background: var(--surface-3);
+            border: 1px solid var(--border-strong);
+            border-radius: 3px;
+            padding: 0px 5px;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: border-color 0.15s, color 0.15s;
+        }
+        
+        .cite:hover {
+            color: var(--text-primary);
+            border-color: var(--text-secondary);
+        }
+        
+        .cite.nvd {
+            color: var(--nvd);
+        }
+        
+        .cite.ctf {
+            color: var(--ctf);
+        }
+        /* retrieval composition bar — signature element */
+        
+        .retrieval {
+            margin: 18px 0 20px;
+        }
+        
+        .retrieval-label {
+            font-family: var(--mono);
+            font-size: 10.5px;
+            color: var(--text-muted);
+            letter-spacing: 0.08em;
+            margin-bottom: 6px;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .retrieval-bar {
+            display: flex;
+            height: 6px;
+            border-radius: 2px;
+            overflow: hidden;
+            background: var(--surface-3);
+        }
+        
+        .retrieval-seg {
+            height: 100%;
+            transition: flex-basis 0.4s ease;
+        }
+        
+        .retrieval-seg.nvd {
+            background: var(--nvd);
+        }
+        
+        .retrieval-seg.ctf {
+            background: var(--ctf);
+        }
+        
+        .retrieval-legend {
+            display: flex;
+            gap: 16px;
+            margin-top: 7px;
+            font-family: var(--mono);
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+        
+        .retrieval-legend span {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .retrieval-legend .sw {
+            width: 7px;
+            height: 7px;
+            border-radius: 1px;
+        }
+        
+        .retrieval-legend .sw.nvd {
+            background: var(--nvd);
+        }
+        
+        .retrieval-legend .sw.ctf {
+            background: var(--ctf);
+        }
+        /* sources */
+        
+        .sources {
+            border-top: 1px solid var(--border);
+            padding-top: 14px;
+        }
+        
+        .source-card {
+            border: 1px solid var(--border);
+            border-radius: 3px;
+            margin-bottom: 8px;
+            overflow: hidden;
+            background: var(--surface-1);
+        }
+        
+        .source-head {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        .source-head:hover {
+            background: var(--surface-2);
+        }
+        
+        .src-badge {
+            font-family: var(--mono);
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            padding: 2px 6px;
+            border-radius: 2px;
+            flex-shrink: 0;
+        }
+        
+        .src-badge.nvd {
+            color: var(--nvd);
+            background: var(--nvd-bg);
+            border: 1px solid var(--nvd-border);
+        }
+        
+        .src-badge.ctf {
+            color: var(--ctf);
+            background: var(--ctf-bg);
+            border: 1px solid var(--ctf-border);
+        }
+        
+        .src-id {
+            font-family: var(--mono);
+            font-size: 12.5px;
+            color: var(--text-primary);
+            flex-shrink: 0;
+        }
+        
+        .src-title {
+            font-size: 13px;
+            color: var(--text-secondary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex: 1;
+        }
+        
+        .sev-pill {
+            font-family: var(--mono);
+            font-size: 10px;
+            font-weight: 600;
+            padding: 2px 7px;
+            border-radius: 2px;
+            flex-shrink: 0;
+        }
+        
+        .sev-critical {
+            color: var(--crit);
+            background: var(--crit-bg);
+        }
+        
+        .sev-high {
+            color: var(--high);
+            background: var(--high-bg);
+        }
+        
+        .sev-medium {
+            color: var(--med);
+            background: var(--med-bg);
+        }
+        
+        .sev-low {
+            color: var(--low);
+            background: var(--low-bg);
+        }
+        
+        .cwe-tag {
+            font-family: var(--mono);
+            font-size: 10px;
+            color: var(--text-muted);
+            background: var(--surface-3);
+            padding: 2px 6px;
+            border-radius: 2px;
+            flex-shrink: 0;
+        }
+        
+        .chev {
+            color: var(--text-muted);
+            font-family: var(--mono);
+            font-size: 11px;
+            transition: transform 0.15s;
+            flex-shrink: 0;
+        }
+        
+        .source-card.open .chev {
+            transform: rotate(90deg);
+        }
+        
+        .source-body {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.2s ease;
+            border-top: 1px solid transparent;
+        }
+        
+        .source-card.open .source-body {
+            max-height: 220px;
+            border-top: 1px solid var(--border);
+        }
+        
+        .source-body-inner {
+            padding: 12px 12px 14px;
+            font-size: 12.5px;
+            color: var(--text-secondary);
+            line-height: 1.65;
+        }
+        
+        .kv-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 5px;
+            font-family: var(--mono);
+            font-size: 11.5px;
+        }
+        
+        .kv-row .k {
+            color: var(--text-muted);
+            min-width: 64px;
+        }
+        
+        .kv-row .v {
+            color: var(--text-secondary);
+        }
+        
+        .src-excerpt {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid var(--border);
+            font-style: normal;
+            color: var(--text-secondary);
+        }
+        
+        .footnote {
+            font-family: var(--mono);
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 36px;
+            padding-top: 14px;
+            border-top: 1px solid var(--border);
+        }
+        
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation: none !important;
+                transition: none !important;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app">
+
+        <div class="header">
+            <div class="wordmark">CTF INTEL<span class="cursor"></span> <span class="dim">// research terminal</span></div>
+            <div class="corpus-stats">
+                <span><b>114,401</b> chunks indexed</span>
+                <span><span class="dot-nvd"></span><b>112,978</b> NVD</span>
+                <span><span class="dot-ctf"></span><b>1,423</b> CTF writeups</span>
+            </div>
+        </div>
+
+        <div class="querybar">
+            <div class="querybar-input-wrap">
+                <span class="prompt-glyph">&gt;</span>
+                <input id="queryInput" type="text" value="internal metadata service reachable from an unauthenticated /fetch?url= param, app fetches attacker-controlled URLs server-side" />
+            </div>
+            <div class="scope-toggle" id="scopeToggle">
+                <button class="active" data-scope="all">All</button>
+                <button data-scope="nvd">NVD</button>
+                <button data-scope="ctf">CTF</button>
+            </div>
+            <button class="run-btn" id="runBtn">Run query</button>
+        </div>
+
+        <div id="conversation">
+            <div class="query-block">
+                <div class="label">QUERY</div>
+                <div class="qtext">internal metadata service reachable from an unauthenticated /fetch?url= param, app fetches attacker-controlled URLs server-side</div>
+            </div>
+
+            <div class="analysis-block">
+                <div class="label">ANALYSIS</div>
+                <div class="analysis-prose">
+                    <p>This is a textbook server-side request forgery setup <span class="cite nvd" data-src="s1">1</span>. The unauthenticated <code>url=</code> parameter means the server itself is making the outbound request, so any URL you supply gets
+                        fetched with the server's network position and credentials — including the cloud metadata endpoint at <code>169.254.169.254</code> if this is hosted on AWS, GCP, or similar.</p>
+                    <p>Start by probing whether the fetch follows redirects and whether it resolves internal hostnames. A documented pattern for this exact class is bypassing naive allowlists with alternate IP encodings (decimal, octal, or IPv6-mapped forms
+                        of the loopback/link-local range) <span class="cite nvd" data-src="s2">2</span>. If the target validates the hostname but re-resolves it later (a TOCTOU gap), DNS rebinding is also worth trying.</p>
+                    <p>A close real-world parallel: a CTF web challenge used almost this exact primitive to reach an internal admin API and pull a flag from a metadata-style endpoint <span class="cite ctf" data-src="s3">3</span>. Worth reading end to end
+                        — the writeup's bypass technique for the URL parser is directly transferable here.</p>
+                </div>
+
+                <div class="retrieval">
+                    <div class="retrieval-label">
+                        <span>retrieval composition</span>
+                        <span>8 chunks retrieved</span>
+                    </div>
+                    <div class="retrieval-bar">
+                        <div class="retrieval-seg nvd" style="flex-basis:75%"></div>
+                        <div class="retrieval-seg ctf" style="flex-basis:25%"></div>
+                    </div>
+                    <div class="retrieval-legend">
+                        <span><span class="sw nvd"></span>6 NVD</span>
+                        <span><span class="sw ctf"></span>2 CTF writeup</span>
+                    </div>
+                </div>
+
+                <div class="sources">
+                    <div class="label">SOURCES</div>
+
+                    <div class="source-card" data-id="s1">
+                        <div class="source-head" onclick="toggleSource(this)">
+                            <span class="src-badge nvd">NVD</span>
+                            <span class="src-id">CVE-2023-41892</span>
+                            <span class="sev-pill sev-high">HIGH · 8.1</span>
+                            <span class="cwe-tag">CWE-918</span>
+                            <span class="src-title">Server-side request forgery via unauthenticated fetch endpoint</span>
+                            <span class="chev">▸</span>
+                        </div>
+                        <div class="source-body">
+                            <div class="source-body-inner">
+                                <div class="kv-row"><span class="k">CWE</span><span class="v">CWE-918 — Server-Side Request Forgery</span></div>
+                                <div class="kv-row"><span class="k">CVSS</span><span class="v">8.1 (High) — AV:N/AC:L/PR:N/UI:N</span></div>
+                                <div class="kv-row"><span class="k">Published</span><span class="v">2023-09-14</span></div>
+                                <div class="src-excerpt">"...the affected component accepts a fully-qualified URL and issues a server-side request without validating the resolved host against an internal-range denylist, permitting requests to link-local and loopback addresses..."</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="source-card" data-id="s2">
+                        <div class="source-head" onclick="toggleSource(this)">
+                            <span class="src-badge nvd">NVD</span>
+                            <span class="src-id">CVE-2022-29078</span>
+                            <span class="sev-pill sev-medium">MEDIUM · 6.5</span>
+                            <span class="cwe-tag">CWE-918</span>
+                            <span class="src-title">SSRF via alternate IP encoding bypassing hostname allowlist</span>
+                            <span class="chev">▸</span>
+                        </div>
+                        <div class="source-body">
+                            <div class="source-body-inner">
+                                <div class="kv-row"><span class="k">CWE</span><span class="v">CWE-918 — Server-Side Request Forgery</span></div>
+                                <div class="kv-row"><span class="k">CVSS</span><span class="v">6.5 (Medium) — AV:N/AC:L/PR:L/UI:N</span></div>
+                                <div class="kv-row"><span class="k">Published</span><span class="v">2022-05-02</span></div>
+                                <div class="src-excerpt">"...validation checked the literal string against a denylist of internal hostnames but did not normalize decimal, octal, or IPv6-mapped representations of the same address, allowing the filter to be bypassed..."</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="source-card" data-id="s3">
+                        <div class="source-head" onclick="toggleSource(this)">
+                            <span class="src-badge ctf">CTF</span>
+                            <span class="src-id">web/cloudy-fetch</span>
+                            <span class="cwe-tag">writeup</span>
+                            <span class="src-title">HackTheBox CTF 2023 — reaching the metadata endpoint through a URL parser quirk</span>
+                            <span class="chev">▸</span>
+                        </div>
+                        <div class="source-body">
+                            <div class="source-body-inner">
+                                <div class="kv-row"><span class="k">Event</span><span class="v">HackTheBox CTF 2023</span></div>
+                                <div class="kv-row"><span class="k">Category</span><span class="v">web</span></div>
+                                <div class="kv-row"><span class="k">Challenge</span><span class="v">cloudy-fetch</span></div>
+                                <div class="src-excerpt">"...the app's URL parser trusted the userinfo segment before the @ symbol, so a payload like http://trusted-host@169.254.169.254/ passed the allowlist check but the actual request went to the metadata IP..."</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footnote">demo interface · retrieval and citations are illustrative sample data, not a live query against the corpus</div>
+
+    </div>
+
+    <script>
+        function toggleSource(headEl) {
+            const card = headEl.closest('.source-card');
+            card.classList.toggle('open');
+        }
+
+        document.getElementById('scopeToggle').addEventListener('click', function(e) {
+            const btn = e.target.closest('button');
+            if (!btn) return;
+            this.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        });
+
+        document.querySelectorAll('.cite').forEach(function(c) {
+            c.addEventListener('click', function() {
+                const card = document.querySelector('.source-card[data-id="' + this.dataset.src + '"]');
+                if (card) {
+                    card.classList.add('open');
+                    card.scrollIntoView({
+                        behavior: (window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'),
+                        block: 'center'
+                    });
+                }
+            });
+        });
+
+        document.getElementById('runBtn').addEventListener('click', function() {
+            const btn = this;
+            const original = btn.textContent;
+            btn.textContent = 'querying…';
+            btn.disabled = true;
+            setTimeout(function() {
+                btn.textContent = original;
+                btn.disabled = false;
+                document.getElementById('conversation').scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start'
+                });
+            }, 700);
+        });
+    </script>
+</body>
+
+</html>

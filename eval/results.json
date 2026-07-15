@@ -2,28 +2,28 @@
   "all_rows": {
     "count": 10,
     "scores": {
-      "faithfulness": 0.8763888888888889
+      "faithfulness": 0.8080808080808082
     }
   },
   "by_expected_source": {
     "nvd": {
       "count": 4,
       "scores": {
-        "faithfulness": 0.75
+        "faithfulness": 0.6590909090909091
       }
     },
     "ctftime": {
       "count": 6,
       "scores": {
-        "faithfulness": 0.9606481481481483
+        "faithfulness": 0.9074074074074074
       }
     }
   },
   "ground_truth_rows": {
     "count": 6,
     "scores": {
-      "context_recall": 0.9444444444444443,
-      "context_precision": 0.8033446711856623
+      "context_recall": 0.9166666666666666,
+      "context_precision": 0.8311224489597363
     }
   },
   "per_question": [
@@ -40,22 +40,22 @@
       "question": "CTF pwn challenge: checksec shows no stack canary, NX enabled, no PIE. The binary calls gets() into a 64-byte local char buffer right before returning. What's my exploitation plan given NX is on?",
       "expected_source": "ctftime",
       "faithfulness": 1.0,
-      "context_recall": 0.6666666666666666,
+      "context_recall": 1.0,
       "context_precision": 0.9583333333173611
     },
     {
       "id": "q003",
       "question": "CTF crypto challenge: I'm given an RSA public key with a very small public exponent (e=3), and a ciphertext, with no padding applied to the plaintext before encryption. What weakness should I be looking to exploit?",
       "expected_source": "ctftime",
-      "faithfulness": 0.8888888888888888,
+      "faithfulness": 0.6666666666666666,
       "context_recall": 1.0,
-      "context_precision": 0.8333333333055556
+      "context_precision": 0.99999999995
     },
     {
       "id": "q004",
       "question": "CTF forensics challenge: I've been given a raw memory dump (.mem file) and told 'something is hiding in memory.' What's a reasonable first step to start investigating it?",
       "expected_source": "ctftime",
-      "faithfulness": 0.875
+      "faithfulness": 0.7777777777777778
     },
     {
       "id": "q005",
@@ -89,8 +89,8 @@
       "id": "q009",
       "question": "CTF web challenge: I noticed the app lets me request `/download?file=report.pdf`, and changing it to `/download?file=../../../../etc/passwd` actually returns the passwd file. What's this called and how far can it typically be pushed?",
       "expected_source": "nvd",
-      "faithfulness": 1.0,
-      "context_recall": 1.0,
+      "faithfulness": 0.6363636363636364,
+      "context_recall": 0.5,
       "context_precision": 0.6071428571276786
     },
     {

@@ -1,6 +1,6 @@
 import "dotenv/config";
 import OpenAI from "openai";
-import type { RetrievedChunk } from "../query";
+import type { RetrievedChunk } from "../query.js";
 
 const CHAT_MODEL = "gpt-4o-mini"; // cheap, fast, fine for grounded Q&A — swap if you want a stronger judge/generator later
 
@@ -22,12 +22,15 @@ export async function generateAnswer(question: string, contexts: RetrievedChunk[
       {
         role: "system",
         content:
-          "You are a CTF/vulnerability research assistant. Answer the question using ONLY the numbered context provided. " +
-          "If the context does not contain material directly relevant to the SPECIFIC vulnerability or technique asked about, " +
-          "respond with exactly: \"The retrieved context doesn't contain relevant information for this question.\" " +
-          "Do not answer from general knowledge, even if you are confident in the answer — an answer not grounded in the " +
-          "provided context is a failure, regardless of whether it happens to be correct. " +
-          "Reference sources by their citation when relevant. Keep your answer focused and under 200 words.",
+            "You are a CTF/vulnerability research assistant. Answer the question using ONLY the numbered context provided. " +
+            "A context chunk counts as relevant if it shares the same vulnerability class, CWE, or exploitation mechanism as " +
+            "the question — even if it describes a different application, scenario, or wording. CVE records in particular are " +
+            "terse and abstract by nature; that alone is not a reason to treat them as irrelevant. Only respond with " +
+            "\"The retrieved context doesn't contain relevant information for this question.\" if none of the context shares " +
+            "the vulnerability class or mechanism in question. " +
+            "Do not answer from general knowledge, even if you are confident in the answer — an answer not grounded in the " +
+            "provided context is a failure, regardless of whether it happens to be correct. " +
+            "Reference sources by their citation when relevant. Keep your answer focused and under 200 words.",
       },
       {
         role: "user",
